@@ -5,6 +5,10 @@
 package calculate;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import fun3kochfractalfx.FUN3KochFractalFX;
@@ -16,20 +20,24 @@ import timeutil.TimeStamp;
  * Modified for FUN3 by Gertjan Schouten
  */
 public class KochManager {
-
+//TODO gebruik maken van observers
+    //TODO progress bars
+    //TODO tasks cancel in plaats van runnable cancel
+    //TODO Runnable veranderen om JavaFX Tasks te extenden
     private ArrayList<Edge> edges;
     private FUN3KochFractalFX application;
     private TimeStamp tsCalc;
     private TimeStamp tsDraw;
     private int level = 0;
-    private volatile AtomicInteger count = new AtomicInteger(0);
+    public volatile AtomicInteger count = new AtomicInteger(0);
 
     private Thread t1;
     private Thread t2;
     private Thread t3;
-    private KochThread runnable1;
-    private KochThread runnable2;
-    private KochThread runnable3;
+    private KochCalculator calcLeft;
+    private KochCalculator calcBottom;
+    private KochCalculator calcRight;
+    ExecutorService threadpool;
 
     public KochManager(FUN3KochFractalFX application) {
         this.application = application;
@@ -38,63 +46,31 @@ public class KochManager {
         this.edges = new ArrayList<Edge>();
     }
 
-    private ArrayList<Edge> leftEdge = new ArrayList<Edge>();
-    private ArrayList<Edge> bottomEdge = new ArrayList<Edge>();
-    private ArrayList<Edge> rightEdge = new ArrayList<Edge>();
+    private ArrayList<Edge> leftEdge = new ArrayList<>();
+    private ArrayList<Edge> bottomEdge = new ArrayList<>();
+    private ArrayList<Edge> rightEdge = new ArrayList<>();
 
     public void changeLevel(int nxt) {
-        cancelThreads();
-        level = nxt;
+        cancelThreadsIfRunning();
         edges.clear();
 
         tsCalc.init();
+
+
+        calcLeft = new KochCalculator(this, Side.LEFT, nxt);
+        calcBottom = new KochCalculator(this, Side.BOTTOM, nxt);
+        calcRight = new KochCalculator(this, Side.RIGHT, nxt);
+
+        threadpool = Executors.newFixedThreadPool(3);
+        application.bindCalcProgressToProgressBar(calcLeft, calcBottom, calcRight);
+
         tsCalc.setBegin("Begin calculating");
 
-        t1 = new Thread(runnable1 = new KochThread(level) {
-            @Override
-            public void run() {
-                koch.generateLeftEdge();
-                count.addAndGet(1);
-            }
-            public void addEdge(Edge e) {
-                leftEdge.add(e);
-            }
-        });
+        threadpool.submit(calcLeft);
+        threadpool.submit(calcBottom);
+        threadpool.submit(calcRight);
 
-        t2 = new Thread(runnable2 = new KochThread(level) {
-            @Override
-            public void run() {
-                koch.generateBottomEdge();
-                count.addAndGet(1);
-            }
-            public void addEdge(Edge e) {
-                bottomEdge.add(e);
-            }
-        });
-
-        t3 = new Thread(runnable3 = new KochThread(level) {
-            @Override
-            public void run() {
-                koch.generateRightEdge();
-                count.addAndGet(1);
-            }
-            public void addEdge(Edge e) {
-                rightEdge.add(e);
-            }
-        });
-
-        t1.start();
-        t2.start();
-        t3.start();
-
-        while(count.get() != 3){}
-
-        finishEdgeArray();
-
-        tsCalc.setEnd("End calculating");
-        application.setTextNrEdges("" + getNrOfEdges());
-        application.setTextCalc(tsCalc.toString());
-        drawEdges();
+        count.set(0);
     }
 
     public void drawEdges() {
@@ -120,19 +96,36 @@ public class KochManager {
         count.set(0);
     }
 
-    private void cancelThreads(){
-        if(t1 != null){
-            runnable1.cancel();
-        }
-        if(t2 != null){
-            runnable2.cancel();
-        }
-        if(t2 != null){
-            runnable3.cancel();
+    private void cancelThreadsIfRunning(){
+        if(calcLeft != null || calcBottom != null || calcRight != null) {
+            calcLeft.cancel();
+            calcRight.cancel();
+            calcBottom.cancel();
         }
     }
 
     public int getNrOfEdges(){
         return (int) (3 * Math.pow(4, level - 1));
+    }
+
+    public void threadDone() throws ExecutionException, InterruptedException {
+        count.incrementAndGet();
+
+        if(count.get() == 3){
+            count.set(0);
+            edges.clear();
+            edges.addAll(calcLeft.get());
+            edges.addAll(calcBottom.get());
+            edges.addAll(calcRight.get());
+
+            tsCalc.setEnd("End Calculating");
+        }
+        application.requestDrawEdges();
+
+        stop();
+    }
+
+    public void stop(){
+        threadpool.shutdown();
     }
 }
