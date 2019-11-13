@@ -363,8 +363,13 @@ public class FUN3KochFractalFX extends Application {
         progressBarRight.setProgress(0);
 
         progressBarLeft.progressProperty().bind(left.progressProperty());
-        progressBarBottom.progressProperty().bind(left.progressProperty());
-        progressBarRight.progressProperty().bind(left.progressProperty());
+        progressBarBottom.progressProperty().bind(bottom.progressProperty());
+        progressBarRight.progressProperty().bind(right.progressProperty());
+
+        labelProgressBarLeft.textProperty().bind(left.messageProperty());
+        labelProgressBarRight.textProperty().bind(right.messageProperty());
+        labelProgressBarBottom.textProperty().bind(bottom.messageProperty());
+
     }
 
     /**

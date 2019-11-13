@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import fun3kochfractalfx.FUN3KochFractalFX;
+import javafx.application.Platform;
 import timeutil.TimeStamp;
 
 /**
@@ -20,10 +21,6 @@ import timeutil.TimeStamp;
  * Modified for FUN3 by Gertjan Schouten
  */
 public class KochManager {
-//TODO gebruik maken van observers
-    //TODO progress bars
-    //TODO tasks cancel in plaats van runnable cancel
-    //TODO Runnable veranderen om JavaFX Tasks te extenden
     private ArrayList<Edge> edges;
     private FUN3KochFractalFX application;
     private TimeStamp tsCalc;
@@ -119,6 +116,13 @@ public class KochManager {
             edges.addAll(calcRight.get());
 
             tsCalc.setEnd("End Calculating");
+
+            Platform.runLater(new Runnable() {
+                @Override
+                public void run() {
+                    application.setTextCalc(tsCalc.toString());
+                }
+            });
         }
         application.requestDrawEdges();
 
